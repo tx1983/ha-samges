@@ -9,6 +9,7 @@ Unofficial [Home Assistant](https://www.home-assistant.io/) integration for the 
 - **Monthly accruals** — charged sum (RUB) and consumption (kWh) for the current billing period with tariff details; the full 13-month accrual history (balance in/out, charged, payments) in attributes
 - **Payments** — last payment amount with date and source; full payment history in attributes
 - **Notifications** — unread count with the notification list in attributes
+- **Reading submission** — a number input per tariff zone on each meter device plus a «Передать показания» button that posts the entered values through the cabinet's form (values wait for the button, like on the site). For automations there is also a `samges.submit_reading` service (target: the meter's «Новое показание» input; field: `value`)
 - **History backfill** — one-off import of dated meter readings, monthly accrual sums (₽) and monthly consumption (kWh, single-meter accounts) into the sensors' long-term statistics, so the History graph and the energy dashboard show past periods right away
 - **Login + password auth** — regular Laravel form login; the `default-captcha-response` field is replayed automatically, no captcha solving needed. Re-authentication is requested only if the credentials themselves are rejected
 - **Configurable polling interval** (15–1440 min, default 60)
@@ -31,7 +32,7 @@ The cabinet is a classic server-rendered Laravel site — there is no JSON API. 
 ## Notes
 
 - Parsing relies on the cabinet's current page markup (tables and label/value blocks on `/account`, `/account/{id}/counters`, `/account/{id}/accruals`). If the site changes its layout, some sensors may go `unavailable` — open an issue with a saved HTML copy of the page.
-- Read-only: submitting meter readings and payments are not supported.
+- Payments are not supported — readings can be submitted, paying still requires the cabinet.
 
 ## Disclaimer
 

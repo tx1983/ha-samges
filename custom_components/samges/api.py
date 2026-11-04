@@ -24,6 +24,8 @@ import aiohttp
 
 from .parser import (
     cell_number,
+    extract_alerts,
+    extract_csrf_token,
     extract_form_fields,
     extract_icon_value,
     extract_lines,
@@ -215,6 +217,98 @@ class SamGesClient:
             1 for n in data["notifications"] if n.get("unread")
         )
         return data
+
+    # ------------------------------------------------------------- writing
+
+    async def async_submit_readings(
+        self, readings: dict[str, dict[str, float]]
+    ) -> None:
+        """POST new meter readings through the counters form.
+
+        ``readings`` maps ``{row_id: {tariff_zone: value}}``; the payload
+        mirrors the real form fields
+        (``counters[{rowId}_{tarif}][value|rowId|tarif]``).
+
+        The CSRF ``_token`` is session-scoped, so the counters page is
+        fetched first for a fresh token; if the POST still bounces to
+        /login (or the token is rejected with 419) the session is
+        re-established and the whole flow retried once.
+        """
+        if not self._account_path:
+            await self.async_sign_in()
+        url = urljoin(SITE_URL, f"{self._account_path}/counters")
+        for attempt in range(2):
+            html = await self._request("GET", url)
+            token = extract_csrf_token(html)
+            if not token:
+                raise SamGesError("CSRF token not found on the counters page")
+            try:
+                await self._post_form(
+                    url, self._readings_payload(token, readings)
+                )
+            except SamGesAuthError:
+                if attempt:
+                    raise
+                # Session cookie died between GET and POST — re-sign in.
+                await self.async_sign_in()
+                continue
+            return
+
+    async def _post_form(self, url: str, data: dict[str, str]) -> None:
+        """POST a urlencoded form; a Laravel 302 back is success.
+
+        Unlike ``_request`` there is no useful body to return — the site
+        answers with a redirect (Post/Redirect/Get), so redirects are
+        interpreted here instead of raising.
+        """
+        try:
+            async with self._session.post(
+                url,
+                data=data,
+                headers={**_headers(url), "Origin": SITE_URL},
+                timeout=_TIMEOUT,
+                allow_redirects=False,
+            ) as resp:
+                location = resp.headers.get("Location", "")
+                body = await resp.text()
+                status = resp.status
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise SamGesError(f"Request to {url} failed: {err}") from err
+
+        if "/login" in location:
+            raise SamGesAuthError("Session expired while submitting the form")
+        if status in (301, 302, 303, 307):
+            _LOGGER.debug("Form POST accepted: %s -> %s", url, location)
+            return
+        if status == 419:
+            raise SamGesAuthError("CSRF token rejected (HTTP 419)")
+        if status >= 400:
+            raise SamGesError(f"HTTP {status} for {url}")
+        # 200: the form was re-rendered — usually a validation error.
+        alerts = extract_alerts(body)
+        ok_words = ("успеш", "принят", "сохранен", "сохранён", "передан")
+        if any(w in alert.lower() for alert in alerts for w in ok_words):
+            _LOGGER.debug("Form POST success message: %s", alerts[0])
+            return
+        raise SamGesError(
+            alerts[0]
+            if alerts
+            else "The form was not accepted (page re-rendered)"
+        )
+
+    @staticmethod
+    def _readings_payload(
+        token: str, readings: dict[str, dict[str, float]]
+    ) -> dict[str, str]:
+        """Build the ``counters[{rowId}_{tarif}][...]`` form fields."""
+        payload = {"_token": token}
+        for row_id, zones in readings.items():
+            for zone, value in zones.items():
+                base = f"counters[{row_id}_{zone}]"
+                payload[f"{base}[value]"] = f"{value:g}"
+                payload[f"{base}[rowId]"] = str(row_id)
+                payload[f"{base}[tarif]"] = str(zone)
+        return payload
 
     # -------------------------------------------------------------- parsers
 

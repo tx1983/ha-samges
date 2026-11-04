@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import SamGesAuthError, SamGesClient, SamGesError
@@ -34,6 +34,43 @@ class SamGesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
         )
         self.client = client
+        # Values typed into the reading NumberEntities, waiting for the
+        # submit button: {counter_id: {tariff_zone: value}}.
+        self.pending: dict[str, dict[str, float]] = {}
+
+    def set_pending(self, counter_id: str, zone: str, value: float) -> None:
+        """Store a typed-in reading and refresh the entity states."""
+        self.pending.setdefault(counter_id, {})[zone] = value
+        self.async_update_listeners()
+
+    def pending_for(self, counter_id: str) -> dict[str, float]:
+        """Pending readings of one meter ({} while nothing was typed)."""
+        return self.pending.get(counter_id) or {}
+
+    async def async_submit_readings(
+        self, readings: dict[str, dict[str, float]]
+    ) -> None:
+        """POST readings to the cabinet and refresh the data."""
+        try:
+            await self.client.async_submit_readings(readings)
+        except SamGesAuthError as err:
+            raise ConfigEntryAuthFailed(
+                f"SamGES credentials rejected: {err}"
+            ) from err
+        except SamGesError as err:
+            raise HomeAssistantError(str(err)) from err
+        # Drop the pending slots that were just accepted.
+        for counter_id, zones in readings.items():
+            stored = self.pending.get(counter_id)
+            if not stored:
+                continue
+            for zone, value in zones.items():
+                if stored.get(zone) == value:
+                    stored.pop(zone)
+            if not stored:
+                self.pending.pop(counter_id, None)
+        self.async_update_listeners()  # grey out the button right away
+        await self.async_request_refresh()
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
