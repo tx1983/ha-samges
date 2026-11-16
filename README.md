@@ -7,6 +7,7 @@ Unofficial [Home Assistant](https://www.home-assistant.io/) integration for the 
 - **Amount due** (RUB) — account balance with number/address/owner and the balance block rows (debt at month start, charged, paid, recalc, penalties) in attributes
 - **Meter readings** — one device per meter: last reading (`TOTAL_INCREASING`, kWh, works with the energy dashboard), reading history table (date, billing month, value, consumption, source) in attributes
 - **Monthly accruals** — charged sum (RUB) and consumption (kWh) for the current billing period with tariff details; the full 13-month accrual history (balance in/out, charged, payments) in attributes
+- **Charged total** (RUB) — running total of all monthly charges (`MONETARY`, `TOTAL`): each new billing period adds its charge, so it works as the cost entity of the energy dashboard with every month at its own tariff. The monthly «Начислено» sensor has no state class.
 - **Payments** — last payment amount with date and source; full payment history in attributes
 - **Notifications** — unread count with the notification list in attributes
 - **Reading submission** — a number input per tariff zone on each meter device plus a «Передать показания» button that posts the entered values through the cabinet's form (values wait for the button, like on the site). For automations there is also a `samges.submit_reading` service (target: the meter's «Новое показание» input; field: `value`)
