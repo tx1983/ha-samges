@@ -98,7 +98,7 @@ class SamGesReadingNumber(CoordinatorEntity[SamGesCoordinator], NumberEntity):
         )
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"counter_{self._counter_id}")},
-            "via_device": (DOMAIN, self.account_id),
+            "via_device_id": coordinator.account_device_id,
             "name": counter.get("name")
             or f"Счётчик {counter.get('serial') or ''}".strip(),
             "manufacturer": "СамГЭС",

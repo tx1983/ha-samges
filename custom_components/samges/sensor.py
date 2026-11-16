@@ -379,7 +379,7 @@ class SamGesCounterSensor(SamGesBaseSensor):
         super().__init__(coordinator, account_id)
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"counter_{self._counter_id}")},
-            "via_device": (DOMAIN, self.account_id),
+            "via_device_id": coordinator.account_device_id,
             "name": self._attr_name,
             "manufacturer": "СамГЭС",
             "model": counter.get("model") or counter.get("serial"),
@@ -431,7 +431,7 @@ class SamGesCounterRateSensor(SamGesBaseSensor):
         super().__init__(coordinator, account_id)
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"counter_{self._counter_id}")},
-            "via_device": (DOMAIN, self.account_id),
+            "via_device_id": coordinator.account_device_id,
         }
 
     def _last(self) -> dict[str, Any]:
@@ -467,7 +467,7 @@ class SamGesCounterCheckDateSensor(SamGesBaseSensor):
         super().__init__(coordinator, account_id)
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"counter_{self._counter_id}")},
-            "via_device": (DOMAIN, self.account_id),
+            "via_device_id": coordinator.account_device_id,
         }
 
     @property
